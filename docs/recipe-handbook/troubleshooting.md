@@ -1,4 +1,4 @@
-<!-- word count: 3010 (target 500+, no cap) -->
+<!-- word count: 3921 (target 500+, no cap) -->
 
 # Troubleshooting
 
@@ -8,7 +8,7 @@ section to confirm the fix worked before you push again.
 
 Each command below says which directory to run it from. Replace
 `<recipe-path>` with the path to your recipe — `core/python/my-recipe`,
-`contrib/python/my-recipe`, or `skills/retail/my-skill`.
+`contrib/python/my-recipe`, or `plugins/retail/my-plugin`.
 
 ## Contents
 
@@ -31,6 +31,12 @@ Each command below says which directory to run it from. Replace
 - [A file or directory the recipe must have is absent](#required-file-or-directory-missing)
 - [The recipe sits at the wrong path](#recipe-is-in-the-wrong-folder)
 - [The recipe lives in a folder that no longer accepts edits](#changes-inside-a-retired-folder)
+- [Only repository admins may modify files under .github/](#only-repository-admins-may-modify-files-under-github)
+- [The recipe contains a recipe-local lint or style configuration file](#standalone-lint-or-style-config-file)
+
+**Containers (Dockerfile)**
+- [Dockerfile failed to build](#dockerfile-build-failed)
+- [Recipe container does not serve](#recipe-container-does-not-serve)
 
 ### Python
 
@@ -66,6 +72,7 @@ Each command below says which directory to run it from. Replace
 
 **Nothing here matches**
 - [The failure is ours, not yours](#ci-infrastructure-failure)
+- [The AI reviewer keeps finding new things](#the-ai-reviewer-keeps-finding-new-things)
 - [Something else](#something-else)
 
 ---
@@ -76,8 +83,8 @@ Each command below says which directory to run it from. Replace
 `[manifest-empty] manifest.yaml has no content — it is either empty or
 contains only comments.`, or a schema error naming the failing field.
 
-**Cause** — every recipe needs a `manifest.yaml` matching the
-[schema](../../.github/schemas/manifest-schema.json).
+**Cause** — every recipe needs a `manifest.yaml` with the fields
+described on the [manifest](./manifest.md) page.
 
 **Fix**
 
@@ -140,15 +147,19 @@ and 2 MB.
 
 **Cause** — the required set is the union of every rule that applies to your
 recipe. Language rules key off `manifest.language`, not the folder path: a
-vertical skill at `skills/retail/product-search` picks up the Python list
+vertical plugin at `plugins/retail/product-search` picks up the Python list
 because its manifest says `language: python`.
 
 | Rule | Applies to | Entries |
 | --- | --- | --- |
-| `always` | every recipe | `README.md` |
+| `always` | every recipe | `README.md`, `.env.example` |
 | `by_root.core` | anything under `core/` | `AGENTS.md` |
-| `by_root.skills` | anything under `skills/` | `SKILL.md`, `EVAL.yaml`, `scripts/` |
-| `by_language.python` | `manifest.language: python` | `pyproject.toml`, `uv.lock`, `.env.example`, `tests/test_runnability.py` |
+| `by_root.plugins` | anything under `plugins/` | `SKILL.md`, `EVAL.yaml`, `scripts/` |
+| `by_language.python` | `manifest.language: python` | `pyproject.toml`, `uv.lock`, `tests/test_runnability.py` |
+| `by_language.go` | `manifest.language: go` | `go.mod` |
+| `by_language.java` | `manifest.language: java` | `pom.xml` / `build.gradle` / `build.gradle.kts` |
+| `by_language.kotlin` | `manifest.language: kotlin` | `build.gradle.kts` |
+| `by_language.typescript` | `manifest.language: typescript` | `package.json`, lockfile (`package-lock.json` / `pnpm-lock.yaml` / `yarn.lock` / `bun.lockb` / `bun.lock`) |
 
 **Fix** — most missing entries have a generator:
 
@@ -176,20 +187,20 @@ git add <recipe-path>/scripts/.gitkeep
 
 **Symptom** — `sits directly under` or `is nested too deeply`
 
-**Cause** — every recipe under `skills/` must sit at
-`skills/<vertical>/<solution>/`. The vertical (`retail/`, `hr/`, `finance/`)
+**Cause** — every recipe under `plugins/` must sit at
+`plugins/<vertical>/<solution>/`. The vertical (`retail/`, `hr/`, `finance/`)
 is mandatory.
 
 ```
-skills/retail/product-search/manifest.yaml    valid
-skills/product-search/manifest.yaml           too shallow — no vertical
-skills/retail/product-search/x/manifest.yaml  too deep
+plugins/retail/product-search/manifest.yaml    valid
+plugins/product-search/manifest.yaml           too shallow — no vertical
+plugins/retail/product-search/x/manifest.yaml  too deep
 ```
 
 **Fix**
 
 1. Move the directory to the path named in the error.
-2. Update `[project].name` in `pyproject.toml` — a vertical skill needs
+2. Update `[project].name` in `pyproject.toml` — a vertical plugin needs
    `<vertical>-<solution>`, not the folder basename. See
    [Project name doesn't match the required name](#project-name-doesnt-match-the-required-name).
 
@@ -216,6 +227,42 @@ out is never blocked.
 
 **Confirm**, from the repo root —
 `uv run validate structure contrib/<language>/<recipe>`
+
+## Only repository admins may modify files under .github/
+
+**Symptom** — `[github-dir-admin-only] ... is under .github/, which can only be modified by repository administrators.`
+
+**Cause** — files in the `.github/` directory (CI workflows, issue templates, automation scripts, and repository policy configuration) control repository-wide infrastructure and security. Only repository administrators are permitted to create, modify, or delete files under `.github/`.
+
+**Fix** — restore `.github/` to exactly what is on `main`. The `git rm` line is
+needed as well as the checkout: `git checkout` restores files that exist on
+`main` but leaves behind any file your branch *added* under `.github/`, which
+would keep the check failing.
+
+    git rm -r --quiet --ignore-unmatch .github/
+    git checkout origin/main -- .github/
+    git commit -m "Revert changes under .github/"
+
+If CI workflow or repository configuration changes are needed, please open an issue describing the requested changes or reach out to a repository administrator.
+
+**Confirm**, from the repo root — this lists exactly the files CI would flag.
+It deliberately passes `--is-admin false`, because the permission lookup needs
+a token the check has in CI and you generally do not have locally:
+
+    git -c core.quotePath=false diff --no-renames --name-only origin/main...HEAD \
+      | uv run --no-project python tools/check_github_dir_changes.py \
+          --author "$(git config user.name)" --is-admin false
+
+## Standalone lint or style config file
+
+**Symptom** — `Recipe contains a recipe-local Biome/golangci-lint/.editorconfig configuration file`
+
+**Cause** — the recipe contains a recipe-local configuration file (`biome.json`, `biome.jsonc`, `.biomerc*`, `.golangci.yml`, `.golangci.yaml`, `.golangci.toml`, `.golangci.json`, or an `.editorconfig` that configures Kotlin style: a Kotlin section such as `[*.{kt,kts}]`, a `ktlint_*` or `ij_kotlin_*` property, or — in a Kotlin recipe — a property such as `max_line_length` in `[*]`). Style and lint configurations are centralized at the repository root. The check is advisory for now: it reports a warning and does not fail the PR.
+
+**Fix** — delete the file from the recipe, or remove the section or property the warning names from `.editorconfig`. If repository-wide style or lint rules need updating, update the root configuration file.
+
+**Confirm**, from the repo root —
+`python3 .github/scripts/check_recipe_lint_config.py <recipe-path>`
 
 ## README.md is missing or empty
 
@@ -315,7 +362,7 @@ no such file.
 yours does not match.
 
 - `core/` and `contrib/` — the recipe folder basename.
-- `skills/` — `<vertical>-<solution>`, because `skills/` interposes a
+- `plugins/` — `<vertical>-<solution>`, because `plugins/` interposes a
   mandatory vertical.
 
 **Fix** — set the name the error reports as required:
@@ -324,7 +371,7 @@ yours does not match.
 # contrib/python/my-recipe
 name = "my-recipe"
 
-# skills/retail/product-search
+# plugins/retail/product-search
 name = "retail-product-search"
 ```
 
@@ -586,6 +633,36 @@ different fixes:
 **Confirm**, from the repo root —
 `grep -n "google-adk" <recipe-path>/pyproject.toml <recipe-path>/uv.lock`
 
+## Dockerfile build failed
+
+**Symptom** — `[docker-build]` or `Docker image failed to build`
+
+**Cause** — a `Dockerfile` at the root of the recipe directory failed to build. Every recipe that provides a root Dockerfile must build cleanly.
+
+**Fix**
+
+1. Build the image locally to reproduce the failure:
+   ```bash
+   docker build -f <recipe-path>/Dockerfile <recipe-path>
+   ```
+2. If files are missing in a `COPY` instruction, ensure all referenced files are committed or created conditionally during build.
+3. If dependency synchronization fails during `uv sync`, ensure `uv.lock` is up to date and compatible with the container's Python version.
+
+## Recipe container does not serve
+
+**Symptom** — `[docker-serves]` or `Container exited unexpectedly` or `Service inside container did not become accessible`
+
+**Cause** — the built container image exited prematurely on startup or did not respond to HTTP requests on port 8080.
+
+**Fix**
+
+1. Run the container locally with test environment variables:
+   ```bash
+   docker run -p 8080:8080 -e USE_IN_MEMORY_SESSION=true -e INTEGRATION_TEST=1 -e MODEL_NAME=gemini-3.5-flash <image-tag>
+   ```
+2. Inspect the container logs (`docker logs <container-id>`) for startup exceptions.
+3. Ensure required configuration variables have defaults in code or `.env.example`, and that import-time GCP calls handle missing credentials gracefully when running offline or in tests.
+
 ## Non-blocking notices
 
 **Symptom** — a `[NOTICE]` header. None of these block your PR.
@@ -596,6 +673,42 @@ different fixes:
 | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` or `MODEL_NAME` absent from `.env.example` | Add them if the recipe reads them — see [Env var missing from .env.example](#env-var-missing-from-envexample). |
 | Core recipe behind the current ADK major | See [the section above](#core-recipe-is-behind-the-current-adk-major). |
 | Recipe marked `status: inactive` | See [the section above](#recipe-is-marked-inactive). |
+
+## The AI reviewer keeps finding new things
+
+**Symptom** — you fix everything the automated review said, push, and get a
+fresh batch of comments. It feels like it will never end.
+
+**Cause** — it used to work that way. Every push re-reviewed the whole pull
+request, and anything already said was filtered out, so each round was forced
+to surface findings you had not seen yet. On a big PR that could go on for a
+long time.
+
+**What happens now**
+
+- A round reads only what changed **since the last review**, so a push that
+  just fixes comments has almost nothing new to look at.
+- Each round is allowed fewer comments than the last one actually produced.
+- There is a hard ceiling on how many comments one PR can ever receive.
+- After the second round only the Correctness and Security lanes run, so the
+  smaller stuff stops.
+
+The last line of every automated review tells you where you are:
+
+> _Round 3 · 18 of this PR's 25 automated comments used · this round is capped
+> at 4 · from here only Correctness and Security run._
+
+**Fix** — nothing to fix; keep going and it will go quiet. Two things worth
+knowing:
+
+- The **House Rules** lane is exempt from all of the above. It is a script,
+  not a model, and it reports repository rules that mostly fail CI — so it
+  keeps commenting until you fix them. Those are the ones to act on.
+- A comment you disagree with: resolve the thread or react 👎 to it, and the
+  reviewer will not raise anything like it again on that PR.
+
+The numbers live in [`.github/policy.yml`](../../.github/policy.yml) under
+`pr_review_budget`.
 
 ## CI infrastructure failure
 
@@ -625,7 +738,7 @@ on the checker and not on your files.
 2. Run `uv run validate all <recipe-path>` from the repo root — a second
    failure is often the cause of the first.
 3. Open an issue at
-   [github.com/google/adk-samples/issues](https://github.com/google/adk-samples/issues):
+   [github.com/google/adk-recipes/issues](https://github.com/google/adk-recipes/issues):
 
    ```
    **Recipe path:** contrib/python/my-recipe
