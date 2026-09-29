@@ -23,11 +23,13 @@ COPY ./pyproject.toml ./README.md ./uv.lock* ./
 
 # Copy application code
 COPY ./app ./app
-COPY .env.example* .env* ./
-RUN if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi
 
 # Install Python dependencies
 RUN uv sync --frozen
+
+# Configuration is supplied at runtime via environment variables (e.g. Cloud
+# Run injects them; for local runs pass `docker run --env-file .env ...`).
+# Nothing secret is baked into the image.
 
 # Run as a non-root user
 RUN useradd --create-home --uid 1000 appuser && \

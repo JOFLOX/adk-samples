@@ -20,14 +20,15 @@ import os
 def test_agent_runnability() -> None:
     """Verify agent.py imports and defines root_agent.
 
-    The package __init__ validates that a credential is present, so a dummy
-    API key is supplied here. No NEO4J_* or MCP_TOOLBOX_URL values are needed:
-    the Neo4j driver connects lazily on first tool use, and the MCP Toolbox is
-    skipped when unconfigured, so importing the agent performs no network I/O.
+    The package __init__ validates that a credential is present, so dummy
+    values are forced here for a hermetic test. No NEO4J_* or MCP_TOOLBOX_URL
+    values are needed: the Neo4j driver connects lazily on first tool use, and
+    the MCP Toolbox is skipped when unconfigured, so importing the agent
+    performs no network I/O.
     """
-    os.environ.setdefault("GOOGLE_GENAI_USE_VERTEXAI", "0")
-    os.environ.setdefault("GOOGLE_API_KEY", "test-key")
-    os.environ.setdefault("MODEL_NAME", "gemini-3.5-flash")
+    os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "0"
+    os.environ["GOOGLE_API_KEY"] = "test-key"
+    os.environ["MODEL_NAME"] = "gemini-3.5-flash"
 
     import app.agent
 
