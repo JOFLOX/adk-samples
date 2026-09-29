@@ -18,11 +18,22 @@ RUN pip install --no-cache-dir uv==0.8.13
 
 WORKDIR /code
 
+# Copy dependency files first for better caching
 COPY ./pyproject.toml ./README.md ./uv.lock* ./
 
+# Copy application code
 COPY ./app ./app
+COPY .env.example* .env* ./
+RUN if [ ! -f .env ] && [ -f .env.example ]; then cp .env.example .env; fi
 
+# Install Python dependencies
 RUN uv sync --frozen
+
+# Run as a non-root user
+RUN useradd --create-home --uid 1000 appuser && \
+    chown -R appuser:appuser /code /home/appuser
+
+USER appuser
 
 ARG AGENT_VERSION=0.0.0
 ENV AGENT_VERSION=${AGENT_VERSION}

@@ -41,7 +41,9 @@ _AGENT_DIR = os.path.dirname(
 @functools.cache
 def get_session_service():
     """Process-wide session service shared across every serving surface."""
-    if uri := os.environ.get("SESSION_SERVICE_URI"):
+    if (uri := os.environ.get("SESSION_SERVICE_URI")) and not uri.startswith(
+        "shared://"
+    ):
         return create_session_service_from_options(
             base_dir=_AGENT_DIR, session_service_uri=uri
         )

@@ -30,6 +30,9 @@ from app.app_utils.reasoning_engine_adapter import (
 )
 
 load_dotenv()
+for _k, _v in list(os.environ.items()):
+    if _v.startswith(("<TODO", "<YOUR_")):
+        del os.environ[_k]
 
 # Cloud telemetry needs Application Default Credentials. Resolve them here
 # rather than letting get_fast_api_app raise DefaultCredentialsError at
@@ -41,8 +44,8 @@ except Exception:
     project_id = None
 
 allow_origins = (
-    os.getenv("ALLOW_ORIGINS", "").split(",")
-    if os.getenv("ALLOW_ORIGINS")
+    [origin.strip() for origin in origins.split(",") if origin.strip()]
+    if (origins := os.getenv("ALLOW_ORIGINS"))
     else None
 )
 
@@ -78,7 +81,9 @@ app: FastAPI = get_fast_api_app(
     artifact_service_uri=services.ARTIFACT_SERVICE_URI,
     allow_origins=allow_origins,
     session_service_uri=services.SESSION_SERVICE_URI,
-    otel_to_cloud=project_id is not None and not os.getenv("INTEGRATION_TEST"),
+    otel_to_cloud=project_id is not None
+    and not os.getenv("INTEGRATION_TEST")
+    and os.getenv("USE_IN_MEMORY_SESSION") not in ("true", "1", "True", "TRUE"),
     lifespan=lifespan,
 )
 app.title = "graphrag-multi-agent"
