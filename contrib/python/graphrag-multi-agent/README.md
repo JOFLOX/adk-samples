@@ -96,6 +96,19 @@ How many organizations are in the graph?
 Find recent articles that mention companies in the automotive industry.
 ```
 
+## Deploy (optional)
+
+The recipe is **deployable** — it ships a `Dockerfile` and the FastAPI/A2A
+serving files (`app/fast_api_app.py`, `app/app_utils/`), so it can be packaged
+into a container and served (e.g. Cloud Run / Agent Engine). Running locally
+with `adk web` needs none of this; the serving env vars in `.env.example`
+(`APP_URL`, `SESSION_SERVICE_URI`, etc.) apply only to the container.
+
+```bash
+# Build the container image (from the recipe root)
+docker build -t graphrag-multi-agent .
+```
+
 ## Optional: MCP Toolbox
 
 The `investment_research_agent` can load pre-validated, expert-authored

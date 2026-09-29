@@ -41,6 +41,7 @@ import re
 from typing import Any
 
 from google.adk.agents import Agent
+from google.adk.apps import App
 from neo4j import GraphDatabase, RoutingControl
 from neo4j.exceptions import Neo4jError
 from neo4j.graph import Node, Path, Relationship
@@ -431,3 +432,5 @@ root_agent = Agent(
         graph_database_agent,
     ],
 )
+
+app = App(root_agent=root_agent, name="app")
