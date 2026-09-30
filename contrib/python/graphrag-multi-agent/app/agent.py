@@ -172,11 +172,16 @@ def _get_db() -> Neo4jDatabase:
     """
     global _db
     if _db is None:
+        uri = os.getenv("NEO4J_URI")
+        username = os.getenv("NEO4J_USERNAME")
+        password = os.getenv("NEO4J_PASSWORD")
+        if not (uri and username and password):
+            raise ValueError(
+                "NEO4J_URI, NEO4J_USERNAME and NEO4J_PASSWORD must be set "
+                "(see .env.example)."
+            )
         _db = Neo4jDatabase(
-            os.getenv("NEO4J_URI"),
-            os.getenv("NEO4J_USERNAME"),
-            os.getenv("NEO4J_PASSWORD"),
-            os.getenv("NEO4J_DATABASE"),
+            uri, username, password, os.getenv("NEO4J_DATABASE")
         )
     return _db
 

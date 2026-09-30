@@ -35,23 +35,28 @@ def _is_unset(name: str) -> bool:
     return not value or value.startswith("<TODO")
 
 
+# Skip the up-front credential check in integration/serving contexts: the
+# container is probed with placeholder env (INTEGRATION_TEST=1) and must boot
+# without a real key — the HTTP probes never call the model. Credentials are
+# still required at request time when a tool actually reaches Gemini.
+_integration = bool(os.getenv("INTEGRATION_TEST"))
 _use_vertex_ai = os.getenv("GOOGLE_GENAI_USE_VERTEXAI") == "1"
 
 if _use_vertex_ai:
     os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "1"
-    if _is_unset("GOOGLE_CLOUD_PROJECT"):
+    if not _integration and _is_unset("GOOGLE_CLOUD_PROJECT"):
         raise ValueError(
             "GOOGLE_CLOUD_PROJECT is not set. Set it in your .env file "
             "(see .env.example)."
         )
-    if _is_unset("GOOGLE_CLOUD_LOCATION"):
+    if not _integration and _is_unset("GOOGLE_CLOUD_LOCATION"):
         raise ValueError(
             "GOOGLE_CLOUD_LOCATION is not set. Set it in your .env file "
             "(see .env.example)."
         )
 else:
     os.environ["GOOGLE_GENAI_USE_VERTEXAI"] = "0"
-    if _is_unset("GOOGLE_API_KEY"):
+    if not _integration and _is_unset("GOOGLE_API_KEY"):
         raise ValueError(
             "GOOGLE_API_KEY is not set. Get one from "
             "https://aistudio.google.com/app/apikey and set it in your .env "
